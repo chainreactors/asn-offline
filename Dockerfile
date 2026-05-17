@@ -1,14 +1,13 @@
-# asn_offline — Python-library tool exposed over HTTP for IaC fleet.
+# asn_offline — thin proxy producing asnmap-shaped JSONL.
 #
-# Bundles `lib.asn` (offline ASN/IP/Org lookup) and the daily refresh job
-# (workflow.jobs.asn_refresh) into a single container. The lookup endpoint
-# reads through $ASN_DATA_DIR, a symlink under the shared $ASN_VOLUME_ROOT.
+# Fans each IP lookup out to:
+#   1. iptoasn-webservice (jedisct1/iptoasn-webservice, separate container)
+#      for ASN number, name, and country
+#   2. local pyasn loaded from ipasn.dat (populated by asn-refresh job)
+#      for the full announced prefix list of that ASN
 #
-# Build context: this directory (src/tools/asn_offline). The build expects
-# `lib_asn/` and `refresh.py` to be staged into the build context before
-# docker build (run prebuild.sh until the meta builder owns that step).
-#
-#     docker build -t meta-asn-offline:latest src/tools/asn_offline
+# Build context: this directory (src/tools/asn_offline).
+#     docker compose build asn-offline
 FROM python:3.12.4-slim
 
 WORKDIR /app
@@ -16,26 +15,20 @@ WORKDIR /app
 COPY requirements.txt /app/requirements.txt
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc libc6-dev \
-    && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir -r /app/requirements.txt
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir -r /app/requirements.txt \
+    && apt-get purge -y --auto-remove gcc libc6-dev
 
-# lib.asn and the refresh job are copied in by the meta builder before build.
-# The COPY paths below assume the build-context staging layout.
-COPY . /app
+COPY app.py entrypoint.sh /app/
+RUN chmod +x /app/entrypoint.sh
 
-# Dataset volume — populated by the refresh sidecar. First boot pulls a fresh
-# snapshot synchronously before the FastAPI service starts serving traffic.
-ENV ASN_VOLUME_ROOT=/var/lib/asn_offline
-VOLUME ["/var/lib/asn_offline"]
+# Dataset (ipasn.dat only) is populated by the host-cron-driven asn-refresh
+# job and mounted read-only here. iptoasn-webservice fetches its own data
+# independently.
+ENV ASN_DATA_DIR=/var/lib/asn_data
+VOLUME ["/var/lib/asn_data"]
 
 ENV PORT=8000
 EXPOSE 8000
 
-# Fail the build instead of producing an image that imports only at runtime.
-RUN test -f /app/refresh.py \
-    && test -f /app/lib_asn/lookup.py \
-    && chmod +x /app/entrypoint.sh
-
-# entrypoint.sh: ensure dataset, start refresh sidecar in background, then
-# hand off to uvicorn in foreground.
 CMD ["/app/entrypoint.sh"]

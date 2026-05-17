@@ -1,7 +1,5 @@
 fastapi
 uvicorn[standard]
 pydantic>=2
-pyyaml
-requests
+httpx
 pyasn
-apscheduler>=3.10
