@@ -9,9 +9,8 @@ Two cooperating containers:
 
 ```
                       ┌─────────────────────────────────────┐
-                      │  host crontab                       │
-                      │   └─ make asn-refresh (oneshot)     │
-                      │      → builds ipasn.dat             │
+                      │  external refresh pipeline          │
+                      │   └─ builds ipasn.dat               │
                       └────────────────┬────────────────────┘
                                        │ writes
                                        ▼
@@ -40,11 +39,10 @@ Two cooperating containers:
 [iptoasn.com](https://iptoasn.com/) data and serves all lookups from
 memory — no per-query rate limit, no external API call.
 
-`pyasn` is loaded from `ipasn.dat` (RouteViews MRT, built daily by
-`workflow.jobs.asn_refresh`). Used only for `get_as_prefixes(asn)` to
-fill `as_range` — the CSTX parser yields one CIDR node per prefix, so
-this fan-out is what produces the full per-ASN CIDR topology in the
-graph.
+`pyasn` is loaded from `ipasn.dat` (RouteViews MRT, supplied by an
+external refresh pipeline). Used only for `get_as_prefixes(asn)` to fill
+`as_range` — the CSTX parser yields one CIDR node per prefix, so this
+fan-out is what produces the full per-ASN CIDR topology in the graph.
 
 ## CLI surface
 
@@ -94,7 +92,7 @@ Field names match what `cstx/plugins/easm/asnmap.py:ASNmapItem` expects.
 ## Dataset lifecycle
 
 - `iptoasn-webservice` self-refreshes from iptoasn.com every 60 minutes.
-- `ipasn.dat` is built by the host-cron oneshot:
-  `make asn-refresh` → `docker compose --profile jobs run --rm asn-refresh`.
-  Lookups soft-fail (empty `as_range`) until the first refresh succeeds;
-  the iptoasn-webservice fan-out continues to work.
+- `ipasn.dat` is supplied by an external refresh pipeline and mounted
+  read-only at `ASN_DATA_DIR`. Lookups soft-fail (empty `as_range`) until
+  the dataset is available; the iptoasn-webservice fan-out continues to
+  work.

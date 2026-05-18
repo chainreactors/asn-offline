@@ -1,9 +1,9 @@
 #!/bin/sh
 # asn_offline container entrypoint.
 #
-# ipasn.dat lives in $ASN_DATA_DIR (shared volume written by the
-# host-cron-driven asn-refresh oneshot job). Without it, prefix lookups
-# return empty as_range; the iptoasn-webservice fan-out still works.
+# ipasn.dat lives in $ASN_DATA_DIR (shared volume written by an external
+# refresh pipeline). Without it, prefix lookups return empty as_range; the
+# iptoasn-webservice fan-out still works.
 set -eu
 
 : "${ASN_DATA_DIR:=/var/lib/asn_data}"
@@ -11,7 +11,7 @@ set -eu
 export ASN_DATA_DIR
 
 if [ ! -e "$ASN_DATA_DIR/ipasn.dat" ]; then
-    echo "[asn_offline] $ASN_DATA_DIR/ipasn.dat missing — as_range will be empty until asn-refresh populates the volume" >&2
+    echo "[asn_offline] $ASN_DATA_DIR/ipasn.dat missing — as_range will be empty until the external dataset is available" >&2
 fi
 
 exec uvicorn app:app --host 0.0.0.0 --port "$PORT"
