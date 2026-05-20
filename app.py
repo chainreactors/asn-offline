@@ -339,7 +339,7 @@ async def health(response: Response):
         iptoasn_ok = r.status_code == 200
     except httpx.HTTPError:
         iptoasn_ok = False
-    ok = prefix_ok and iptoasn_ok
+    ok = iptoasn_ok  # prefix_data is optional; degrade gracefully
     if not ok:
         response.status_code = 503
     return {
